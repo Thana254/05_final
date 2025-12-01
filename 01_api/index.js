@@ -37,7 +37,6 @@ app.get('/health', async (req, res) => {
 // ---------------------------------------
 app.get('/todos', async (req, res) => {
   try {
-    // เปลี่ยน DESC → ASC
     const [rows] = await pool.query('SELECT * FROM todos ORDER BY id ASC');
     res.json(rows);
   } catch (e) {
@@ -85,7 +84,6 @@ app.put('/todos/:id', async (req, res) => {
       [title, description || null, status, deadline || null, id]
     );
 
-    // [เพิ่ม] เช็คว่ามีการแก้ไขจริงไหม
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Todo not found' });
     }
@@ -107,7 +105,6 @@ app.delete('/todos/:id', async (req, res) => {
 
     const [result] = await pool.query('DELETE FROM todos WHERE id=?', [id]);
 
-    // [เพิ่ม] เช็คว่าลบจริงไหม (เผื่อ ID ผิด)
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Todo not found' });
     }
@@ -121,6 +118,5 @@ app.delete('/todos/:id', async (req, res) => {
 });
 
 // ---------------------------------------
-
 const port = Number(process.env.PORT || 3001);
 app.listen(port, () => console.log(`API listening on http://localhost:${port}`));
