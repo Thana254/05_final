@@ -51,17 +51,19 @@ app.get('/todos', async (req, res) => {
 // ---------------------------------------
 app.post('/todos', async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, description, deadline } = req.body;
 
     const [result] = await pool.query(
-      'INSERT INTO todos (title, status) VALUES (?, ?)',
-      [title, 0]
+      'INSERT INTO todos (title, description, status, deadline) VALUES (?, ?, ?, ?)',
+      [title, description || null, 'pending', deadline || null] // status เป็น pending
     );
 
     res.json({
       id: result.insertId,
       title,
-      status: 0
+      description: description || null,
+      status: 'pending',
+      deadline: deadline || null
     });
 
   } catch (e) {
@@ -75,15 +77,20 @@ app.post('/todos', async (req, res) => {
 // ---------------------------------------
 app.put('/todos/:id', async (req, res) => {
   try {
-    const { title, status } = req.body;
+    const { title, description, status, deadline } = req.body;
     const { id } = req.params;
 
-    await pool.query(
-      'UPDATE todos SET title=?, status=? WHERE id=?',
-      [title, status, id]
+    const [result] = await pool.query(
+      'UPDATE todos SET title=?, description=?, status=?, deadline=? WHERE id=?',
+      [title, description || null, status, deadline || null, id]
     );
 
-    res.json({ message: 'updated', id, title, status });
+    // [เพิ่ม] เช็คว่ามีการแก้ไขจริงไหม
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    res.json({ message: 'updated', id, title, description, status, deadline });
 
   } catch (e) {
     console.error(e);
@@ -98,7 +105,12 @@ app.delete('/todos/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    await pool.query('DELETE FROM todos WHERE id=?', [id]);
+    const [result] = await pool.query('DELETE FROM todos WHERE id=?', [id]);
+
+    // [เพิ่ม] เช็คว่าลบจริงไหม (เผื่อ ID ผิด)
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
 
     res.json({ message: 'deleted', id });
 
