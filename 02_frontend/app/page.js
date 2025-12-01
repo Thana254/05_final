@@ -7,28 +7,109 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function getTodos() {
-      try {
-        const apiHost = process.env.NEXT_PUBLIC_API_HOST;
-        const res = await fetch(`${apiHost}/todos`, { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to fetch");
-        const data = await res.json();
-        setTodos(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+  const [form, setForm] = useState({ title: "", description: "", deadline: "" });
+  const [editingId, setEditingId] = useState(null);
 
-    getTodos();
+  const apiHost = process.env.NEXT_PUBLIC_API_HOST;
+
+  // Fetch todos from database
+  const fetchTodos = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiHost}/todos`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setTodos(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodos();
   }, []);
+
+  const handleInputChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleAddTodo = async () => {
+    if (!form.title || !form.deadline) return alert("Title and deadline required");
+
+    try {
+      const res = await fetch(`${apiHost}/todos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed to add todo");
+      setForm({ title: "", description: "", deadline: "" });
+      fetchTodos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleEditTodo = (todo) => {
+    setEditingId(todo.id);
+    setForm({
+      title: todo.title,
+      description: todo.description || "",
+      deadline: todo.deadline ? todo.deadline : "",
+    });
+  };
+
+  const handleUpdateTodo = async () => {
+    if (!form.title || !form.deadline) return alert("Title and deadline required");
+
+    try {
+      const res = await fetch(`${apiHost}/todos/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed to update todo");
+      setEditingId(null);
+      setForm({ title: "", description: "", deadline: "" });
+      fetchTodos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteTodo = async (id) => {
+    if (!confirm("Are you sure to delete this todo?")) return;
+    try {
+      const res = await fetch(`${apiHost}/todos/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete todo");
+      fetchTodos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleToggleStatus = async (todo) => {
+    try {
+      const updatedStatus = todo.status === "finish" ? "pending" : "finish";
+      const res = await fetch(`${apiHost}/todos/${todo.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...todo, status: updatedStatus }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      fetchTodos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   if (loading) return <div className="empty">Loading...</div>;
   if (error) return <div className="empty">Error: {error}</div>;
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <main className="container">
@@ -37,25 +118,73 @@ export default function Page() {
         <p className="subtitle">Track your tasks and deadlines</p>
       </header>
 
+      {/* Form */}
+      <section className="form">
+        <input
+          type="text"
+          name="title"
+          placeholder="Title"
+          value={form.title}
+          onChange={handleInputChange}
+        />
+        <input
+          type="text"
+          name="description"
+          placeholder="Description"
+          value={form.description}
+          onChange={handleInputChange}
+        />
+        <input
+          type="date"
+          name="deadline"
+          value={form.deadline}
+          onChange={handleInputChange}
+        />
+        {editingId ? (
+          <button onClick={handleUpdateTodo}>Update Todo</button>
+        ) : (
+          <button onClick={handleAddTodo}>Add Todo</button>
+        )}
+      </section>
+
+      {/* Todo List */}
       {!todos || todos.length === 0 ? (
         <div className="empty">No tasks found.</div>
       ) : (
         <section className="grid" aria-live="polite">
           {todos.map((x) => {
-            const deadlineDate = new Date(x.deadline);
-            const isOverdue = x.status !== "finish" && deadlineDate < today;
+            const deadlineDate = x.deadline ? new Date(x.deadline) : null;
+            const isValidDate = deadlineDate && !isNaN(deadlineDate.getTime());
+            if (isValidDate) deadlineDate.setHours(0, 0, 0, 0);
+
+            const isOverdue = x.status !== "finish" && isValidDate && deadlineDate < today;
             const cardClass = x.status === "finish" ? "finish" : isOverdue ? "overdue" : "";
 
             return (
               <article key={x.id} className={`card ${cardClass}`} tabIndex={0}>
                 <div className="body">
-                  <h3 className="card-title">{x.title}</h3>
+                  <h3 className="card-title">
+                    {x.title}{" "}
+                    <input
+                      type="checkbox"
+                      checked={x.status === "finish"}
+                      onChange={() => handleToggleStatus(x)}
+                      title="Mark as finished"
+                    />
+                  </h3>
                   {x.description && <p className="detail">{x.description}</p>}
                   <div className="meta">
                     <small>
                       Status: <span className="code">{x.status}</span> ·
-                      Deadline: <span className="code">{deadlineDate.toLocaleDateString()}</span>
+                      Deadline:{" "}
+                      <span className="code">
+                        {isValidDate ? deadlineDate.toISOString().split("T")[0] : "–"}
+                      </span>
                     </small>
+                  </div>
+                  <div className="actions">
+                    <button onClick={() => handleEditTodo(x)}>Edit</button>
+                    <button onClick={() => handleDeleteTodo(x.id)}>Delete</button>
                   </div>
                 </div>
               </article>
