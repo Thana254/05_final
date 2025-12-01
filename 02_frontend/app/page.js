@@ -36,28 +36,41 @@ export default function Page() {
   };
 
   const handleAddTodo = async () => {
-    if (!form.title || !form.deadline) return alert("Title and deadline required");
+  if (!form.title || !form.deadline) return alert("Title and deadline required");
 
-    try {
-      const res = await fetch(`${apiHost}/todos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error("Failed to add todo");
-      setForm({ title: "", description: "", deadline: "" });
-      fetchTodos();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+  try {
+    const newTodo = { ...form, status: "pending" }; // กำหนดค่า status
+    const res = await fetch(`${apiHost}/todos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTodo),
+    });
+    if (!res.ok) throw new Error("Failed to add todo");
+    setForm({ title: "", description: "", deadline: "" });
+    fetchTodos();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 
   const handleEditTodo = (todo) => {
     setEditingId(todo.id);
+    
+    // แปลงวันที่เป็น YYYY-MM-DD เพื่อให้แสดงใน input type="date" ได้
+    let formattedDeadline = "";
+    if (todo.deadline) {
+      const dateObj = new Date(todo.deadline);
+      if (!isNaN(dateObj)) {
+        formattedDeadline = dateObj.toISOString().split("T")[0];
+      }
+    }
+
     setForm({
       title: todo.title,
       description: todo.description || "",
-      deadline: todo.deadline ? todo.deadline : "",
+      deadline: formattedDeadline,
+      status: todo.status, // <--- เพิ่มบรรทัดนี้ เพื่อจำค่า Status เดิมไว้
     });
   };
 
@@ -65,14 +78,19 @@ export default function Page() {
     if (!form.title || !form.deadline) return alert("Title and deadline required");
 
     try {
+      // ใช้ค่าจาก form ทั้งหมดรวมถึง status ที่เราเพิ่มไปใน handleEditTodo แล้ว
+      const updatedTodo = { ...form }; 
+      
       const res = await fetch(`${apiHost}/todos/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(updatedTodo),
       });
+
       if (!res.ok) throw new Error("Failed to update todo");
+      
       setEditingId(null);
-      setForm({ title: "", description: "", deadline: "" });
+      setForm({ title: "", description: "", deadline: "" }); // Reset form
       fetchTodos();
     } catch (err) {
       alert(err.message);
